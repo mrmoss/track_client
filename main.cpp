@@ -1,14 +1,14 @@
 //Algorithm Header
 #include <algorithm>
 
-//Color Tracking Header
-#include "color_tracker.hpp"
-
 //File Utility Header
 #include "msl/file_util.hpp"
 
 //IO Stream Header
 #include <iostream>
+
+//Object Tracking Header
+#include "object_tracker.hpp"
 
 //OpenCV Header
 #include <opencv2/opencv.hpp>
@@ -37,11 +37,13 @@ int area_box_tolerance=100;
 cv::Vec3b pink_color(170,200,200);
 cv::Vec3b lime_color(70,200,200);
 
+//Create Tracked Object
+object_tracker tracked(pink_color,lime_color);
+
 //Mouse Callback Variables
 int mouse_x=0;
 int mouse_y=0;
 int mouse_flags=0;
-const int kb_escape=1048603;
 
 //Load Configuration Function Declaration
 bool load_configuration();
@@ -63,7 +65,7 @@ int main()
 		save_configuration();
 
 	//Get Camera
-	cv::VideoCapture cap=cv::VideoCapture(0);
+	cv::VideoCapture cap(cv::VideoCapture(0));
 
 	//Camera Opened
 	if(cap.isOpened())
@@ -90,17 +92,16 @@ int main()
 	cv::createTrackbar("Value Tolerance","video",&v_tolerance,255,NULL);
 	cv::createTrackbar("Area Minimum","video",&area_min_tolerance,200,NULL);
 
-	//Create Color Trackers
-	color_tracker pink(pink_color);
-	color_tracker lime(lime_color);
-
-	//Track For Forever
+	//Track Objects...For Forever And Ever...
 	while(true)
 	{
 		//Exit Key
-		if(cv::waitKey(1)==kb_escape)
+		if(cv::waitKey(1)!=-1)
 		{
+			//Save Current Configuration
 			save_configuration();
+
+			//Exit Program
 			exit(0);
 		}
 
@@ -111,6 +112,10 @@ int main()
 		//If The Current Frame Has Data
 		if(!current_frame.empty())
 		{
+			//Set Tolerances For Tracked Object
+			tracked.set_hsv_tolerances(h_tolerance,s_tolerance,v_tolerance);
+			tracked.set_area_tolerances(area_min_tolerance,area_box_tolerance);
+
 			//Get HSV Version of Frame
 			cv::Mat current_frame_hsv;
 			cv::cvtColor(current_frame,current_frame_hsv,CV_BGR2HSV);
@@ -129,55 +134,22 @@ int main()
 				if(mouse_flags&CV_EVENT_FLAG_LBUTTON)
 				{
 					pink_color=pixel;
-					pink.set_hsv_color(pink_color);
+					tracked.set_pink_hsv_color(pink_color);
 				}
 
 				//Right Mouse Button Sets Lime Object Color
 				if(mouse_flags&CV_EVENT_FLAG_RBUTTON)
 				{
 					lime_color=pixel;
-					lime.set_hsv_color(lime_color);
+					tracked.set_lime_hsv_color(lime_color);
 				}
 			}
 
-			//Set Tolerances For Pink Object
-			pink.set_hsv_tolerances(h_tolerance,s_tolerance,v_tolerance);
-			pink.set_area_tolerances(area_min_tolerance,area_box_tolerance);
-
-			//Set Tolerances For Lime Object
-			lime.set_hsv_tolerances(h_tolerance,s_tolerance,v_tolerance);
-			lime.set_area_tolerances(area_min_tolerance,area_box_tolerance);
-
-			//Update Pink Object
-			pink.update(current_frame_hsv);
-
-			//Update Lime Object
-			lime.update(current_frame_hsv);
-
-			//Create a Canvas to Draw On
-			cv::Mat canvas(cv::Mat::zeros(current_frame.size(),CV_8UC3));
-
-			//If There Are Two Object To Track
-			if(pink.area()>area_min_tolerance*area_min_tolerance&&lime.area()>area_min_tolerance*area_min_tolerance)
-			{
-				//DEBUG
-				std::cout<<"pink\tx:"<<pink.x()<<"\ty:"<<pink.y()<<"\tarea:"<<pink.area()<<std::endl;
-				std::cout<<"lime\tx:"<<lime.x()<<"\ty:"<<lime.y()<<"\tarea:"<<lime.area()<<std::endl;
-
-				//Draw Line Between Objects
-				cv::line(canvas,cv::Point(pink.y(),pink.x()),cv::Point(lime.y(),lime.x()),cv::Scalar(255,128,128),5);
-			}
-
-			//Create Tracked Object Colors Canvas
-			std::vector<cv::Mat> tracked_object_colors_channels;
-			tracked_object_colors_channels.push_back(lime.threshed());
-			tracked_object_colors_channels.push_back(lime.threshed());
-			tracked_object_colors_channels.push_back(pink.threshed());
-			cv::Mat tracked_object_colors;
-			cv::merge(tracked_object_colors_channels,tracked_object_colors);
-
 			//Add Tracked Object Colors and Lines to Current Frame
-			current_frame=current_frame*0.5+tracked_object_colors+canvas;
+			current_frame=current_frame*0.5+tracked.update(current_frame_hsv);
+
+			//Debug
+			std::cout<<"x:"<<tracked.x()<<"\ty:"<<tracked.y()<<"\tdirection:"<<tracked.direction()<<std::endl;
 
 			//Draw Current Frame
 			cv::imshow("video",current_frame);
@@ -265,6 +237,10 @@ bool load_configuration()
 			else if(variables[ii]=="lime_color_v")
 				lime_color[2]=values[ii];
 		}
+
+		//Update Tracked Object Colors
+		tracked.set_pink_hsv_color(pink_color);
+		tracked.set_lime_hsv_color(lime_color);
 
 		//Load Successful
 		return true;

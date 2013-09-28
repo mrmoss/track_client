@@ -50,6 +50,31 @@ float color_matcher::area() const
 	return _area;
 }
 
+int color_matcher::h_tolerance() const
+{
+	return _h_tolerance;
+}
+
+int color_matcher::s_tolerance() const
+{
+	return _s_tolerance;
+}
+
+int color_matcher::v_tolerance() const
+{
+	return _v_tolerance;
+}
+
+int color_matcher::area_min_tolerance() const
+{
+	return _area_min_tolerance;
+}
+
+int color_matcher::area_box_tolerance() const
+{
+	return _area_box_tolerance;
+}
+
 cv::Mat color_matcher::threshed() const
 {
 	return _threshed;

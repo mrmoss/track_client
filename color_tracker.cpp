@@ -10,17 +10,42 @@ void color_tracker::update(const cv::Mat& hsv_frame)
 
 float color_tracker::x() const
 {
-	return _matcher.y();
+	return _matcher.x();
 }
 
 float color_tracker::y() const
 {
-	return _matcher.x();
+	return _matcher.y();
 }
 
 float color_tracker::area() const
 {
 	return _matcher.area();
+}
+
+int color_tracker::h_tolerance() const
+{
+	return _matcher.h_tolerance();
+}
+
+int color_tracker::s_tolerance() const
+{
+	return _matcher.s_tolerance();
+}
+
+int color_tracker::v_tolerance() const
+{
+	return _matcher.v_tolerance();
+}
+
+int color_tracker::area_min_tolerance() const
+{
+	return _matcher.area_min_tolerance();
+}
+
+int color_tracker::area_box_tolerance() const
+{
+	return _matcher.area_box_tolerance();
 }
 
 cv::Mat color_tracker::threshed() const

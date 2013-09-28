@@ -15,6 +15,12 @@ class color_tracker
 		float x() const;
 		float y() const;
 		float area() const;
+		int h_tolerance() const;
+		int s_tolerance() const;
+		int v_tolerance() const;
+		int area_min_tolerance() const;
+		int area_box_tolerance() const;
+
 		cv::Mat threshed() const;
 
 		void set_hsv_color(const cv::Vec3b& hsv_color);
