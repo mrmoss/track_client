@@ -13,8 +13,17 @@
 //OpenCV Header
 #include <opencv2/opencv.hpp>
 
+//Thread Header
+#include <pthread.h>
+
+//Socket Header
+#include "msl/socket.hpp"
+
 //String Header
 #include <string>
+
+//String Header (memset)
+#include <string.h>
 
 //String Stream Header
 #include <sstream>
@@ -45,11 +54,17 @@ int mouse_x=0;
 int mouse_y=0;
 int mouse_flags=0;
 
+//Server Variables
+std::string server_ip_address="127.0.0.1:9999";
+
 //Load Configuration Function Declaration
 bool load_configuration();
 
 //Save Configuration Function Declaration
 void save_configuration();
+
+//Server Thread Function Declaration
+void* server_thread_function(void*);
 
 //Mouse Callback Function Declaration
 void mouse_callback(int event,int x,int y,int flags,void *param);
@@ -67,9 +82,13 @@ int main()
 	//Get Camera
 	cv::VideoCapture cap(cv::VideoCapture(0));
 
+	//Create Server Thread
+	pthread_t server_thread;
+
 	//Camera Opened
-	if(cap.isOpened())
+	if(cap.isOpened()&&pthread_create(&server_thread,NULL,&server_thread_function,NULL)==0)
 	{
+		pthread_detach(server_thread);
 		std::cout<<":)"<<std::endl;
 	}
 
@@ -149,7 +168,7 @@ int main()
 			current_frame=current_frame*0.5+tracked.update(current_frame_hsv);
 
 			//Debug
-			std::cout<<"x:"<<tracked.x()<<"\ty:"<<tracked.y()<<"\tdirection:"<<tracked.direction()<<std::endl;
+			//std::cout<<"x:"<<tracked.x()<<"\ty:"<<tracked.y()<<"\tdirection:"<<tracked.direction()<<std::endl;
 
 			//Draw Current Frame
 			cv::imshow("video",current_frame);
@@ -174,7 +193,7 @@ bool load_configuration()
 
 		//Create Vectors to Hold Parsed Variables and Values
 		std::vector<std::string> variables;
-		std::vector<int> values;
+		std::vector<std::string> values;
 
 		//Temporary String Variable
 		std::string temp="";
@@ -190,7 +209,7 @@ bool load_configuration()
 
 				//Parse Value
 				if(istr>>temp)
-					values.push_back(msl::to_int(temp));
+					values.push_back(temp);
 
 				//Error Parsing Value, Break
 				else
@@ -209,33 +228,37 @@ bool load_configuration()
 		{
 			//Check For HSV Tolerances
 			if(variables[ii]=="h_tolerance")
-				h_tolerance=values[ii];
+				h_tolerance=msl::to_int(values[ii]);
 			else if(variables[ii]=="s_tolerance")
-				s_tolerance=values[ii];
+				s_tolerance=msl::to_int(values[ii]);
 			else if(variables[ii]=="v_tolerance")
-				v_tolerance=values[ii];
+				v_tolerance=msl::to_int(values[ii]);
 
 			//Check For Area Tolerances
 			else if(variables[ii]=="area_min_tolerance")
-				area_min_tolerance=values[ii];
+				area_min_tolerance=msl::to_int(values[ii]);
 			else if(variables[ii]=="area_max_tolerance")
-				area_box_tolerance=values[ii];
+				area_box_tolerance=msl::to_int(values[ii]);
 
 			//Check For Pink Color
 			else if(variables[ii]=="pink_color_h")
-				pink_color[0]=values[ii];
+				pink_color[0]=msl::to_int(values[ii]);
 			else if(variables[ii]=="pink_color_s")
-				pink_color[1]=values[ii];
+				pink_color[1]=msl::to_int(values[ii]);
 			else if(variables[ii]=="pink_color_v")
-				pink_color[2]=values[ii];
+				pink_color[2]=msl::to_int(values[ii]);
 
 			//Check For Lime Color
 			else if(variables[ii]=="lime_color_h")
-				lime_color[0]=values[ii];
+				lime_color[0]=msl::to_int(values[ii]);
 			else if(variables[ii]=="lime_color_s")
-				lime_color[1]=values[ii];
+				lime_color[1]=msl::to_int(values[ii]);
 			else if(variables[ii]=="lime_color_v")
-				lime_color[2]=values[ii];
+				lime_color[2]=msl::to_int(values[ii]);
+
+			//Check For Server IP Address
+			else if(variables[ii]=="server_ip_address")
+				server_ip_address=values[ii];
 		}
 
 		//Update Tracked Object Colors
@@ -275,8 +298,58 @@ void save_configuration()
 	configuration_data+="lime_color_s\t"+msl::to_string(static_cast<int>(lime_color[1]))+"\n";
 	configuration_data+="lime_color_v\t"+msl::to_string(static_cast<int>(lime_color[2]))+"\n";
 
+	//Add Server IP Address
+	configuration_data+="server_ip_address\t"+server_ip_address+"\n";
+
 	//Save Configuration File
 	msl::string_to_file(configuration_data,configuration_filename);
+}
+
+//Server Thread Function Definition
+void* server_thread_function(void*)
+{
+	//Client Socket
+	msl::socket client(server_ip_address);
+
+	//Send Updates...Forever...
+	while(true)
+	{
+		//If Disconnected
+		while(!client.good())
+		{
+			//Wait On Server a Bit...
+			usleep(10000);
+
+			//Try to Connect to Server
+			client.connect_tcp();
+		}
+
+		//Get Current Tracked Object's Position and Direction
+		float x=tracked.x();
+		float y=tracked.y();
+		float direction=tracked.direction();
+
+		//Create Packet to Send
+		char packet[17];
+
+		//Package Packet
+		memcpy(packet+0,"uaf",4);
+		packet[3]=12;
+		memcpy(packet+4,&x,4);
+		memcpy(packet+8,&y,4);
+		memcpy(packet+12,&direction,4);
+		packet[16]=0;
+
+		//Calculate Packet CRC
+		for(int ii=0;ii<16;++ii)
+			packet[16]^=packet[ii];
+
+		//Send Packet
+		client.write(packet,17);
+
+		//Give OS a Break...
+		usleep(0);
+	}
 }
 
 //Mouse Callback Function Definition
