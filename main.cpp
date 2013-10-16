@@ -350,6 +350,9 @@ void* server_thread_function(void*)
 		//Give OS a Break...
 		usleep(0);
 	}
+
+	//Return
+	return 0;
 }
 
 //Mouse Callback Function Definition
